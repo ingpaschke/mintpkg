@@ -50,6 +50,9 @@ jobs:
           merge-multiple: true
           path: repo/
 
+      - name: publish public key
+        run: cp keys/mpk.pub repo/mpk.pub
+
       - name: generate + sign index
         env:
           MPK_SIGN_KEY_B64: ${{ secrets.MPK_SIGN_KEY_B64 }}

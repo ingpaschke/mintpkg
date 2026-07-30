@@ -54,5 +54,6 @@ Proof of concept. Roadmap:
 - [ ] C client (drop bash/coreutils dependency for base install)
 - [ ] GEM front-end / stool-style web UI
 - [ ] Mine SpareMiNT SRPM patch archive for recipes
-- [ ] Repo signing key ceremony + mirror docs
+- [x] Repo signing (minisign key in CI secrets, pubkey in `keys/mpk.pub`)
+- [ ] Mirror docs + key rotation procedure
 - [ ] mintelf vs a.out ABI variants once the ecosystem settles
