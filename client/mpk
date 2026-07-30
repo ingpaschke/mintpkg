@@ -1,0 +1,128 @@
+#!/bin/sh
+# mpk: mintpkg client. POSIX sh; runs under MiNT bash or Linux for testing.
+# needs: tar, gzip, sha256sum, awk, and curl or wget for http repos.
+#
+# env:
+#   MPK_REPO      repo URL or local path (required)
+#   MPK_ROOT      install root (default /)
+#   MPK_FORCE_ARCH  override arch detection
+#   MPK_INSECURE=1  allow unsigned INDEX
+#   MPK_PUBKEY    minisign public key file (default $MPK_ROOT/etc/mpk.pub)
+set -eu
+
+REPO=${MPK_REPO:?set MPK_REPO to repo URL or path}
+ROOT=${MPK_ROOT:-/}
+DB=$ROOT/var/mpk/installed
+CACHE=$ROOT/var/mpk/cache
+
+arch_detect() {
+    [ -n "${MPK_FORCE_ARCH:-}" ] && { echo "$MPK_FORCE_ARCH"; return; }
+    case "$(uname -m 2>/dev/null || echo unknown)" in
+        m68k|atari*) echo m68020-60 ;;   # TODO: probe 68000/coldfire properly
+        *) echo native ;;
+    esac
+}
+ARCH=$(arch_detect)
+
+fetch() { # fetch <relpath> <dest>
+    case "$REPO" in
+        http://*|https://*)
+            if command -v curl >/dev/null; then curl -fsSL -o "$2" "$REPO/$1"
+            else wget -q -O "$2" "$REPO/$1"; fi ;;
+        *) cp "$REPO/$1" "$2" ;;
+    esac
+}
+
+load_index() {
+    mkdir -p "$CACHE"
+    INDEX=$CACHE/INDEX
+    fetch INDEX "$INDEX"
+    head -1 "$INDEX" | grep -q '^#mintpkg-index v1$' || {
+        echo "mpk: bad index magic" >&2; exit 1; }
+    if [ "${MPK_INSECURE:-0}" != 1 ]; then
+        pub=${MPK_PUBKEY:-$ROOT/etc/mpk.pub}
+        command -v minisign >/dev/null || {
+            echo "mpk: minisign not found; set MPK_INSECURE=1 to skip" >&2; exit 1; }
+        fetch INDEX.minisig "$INDEX.minisig"
+        minisign -Vq -p "$pub" -m "$INDEX" || {
+            echo "mpk: INDEX signature verification FAILED" >&2; exit 1; }
+    fi
+}
+
+# index_line <name> -> best matching pkg line for our arch
+index_line() {
+    awk -F'|' -v n="$1" -v a="$ARCH" \
+        '$1=="pkg" && $2==n && ($4==a) {print; exit}' "$INDEX"
+}
+
+is_installed() { [ -f "$DB/$1" ]; }
+
+install_one() { # install_one <name>
+    name=$1
+    is_installed "$name" && { echo "mpk: $name already installed"; return 0; }
+    line=$(index_line "$name")
+    [ -n "$line" ] || { echo "mpk: no package '$name' for arch $ARCH" >&2; exit 1; }
+    ver=$(echo "$line"  | awk -F'|' '{print $3}')
+    deps=$(echo "$line" | awk -F'|' '{print $5}')
+    sum=$(echo "$line"  | awk -F'|' '{print $6}')
+    file=$(echo "$line" | awk -F'|' '{print $8}')
+    target=$(echo "$line" | awk -F'|' '{print $9}')
+
+    # deps first
+    oldifs=$IFS; IFS=','
+    for d in $deps; do IFS=$oldifs; [ -n "$d" ] && install_one "$d"; IFS=','; done
+    IFS=$oldifs
+
+    echo "mpk: installing $name-$ver ($target)"
+    fetch "$file" "$CACHE/$file"
+    got=$(sha256sum "$CACHE/$file" | cut -d' ' -f1)
+    [ "$got" = "$sum" ] || { echo "mpk: sha256 mismatch for $file" >&2; exit 1; }
+
+    dest=$ROOT
+    [ "$target" = gem ] && dest=$ROOT   # gem pkgs stage under ./c/, mapped below
+    mkdir -p "$dest" "$DB"
+    tar -xzpf "$CACHE/$file" -C "$dest"
+    { echo "version=$ver"; tar -tzf "$CACHE/$file" | grep -v '/$'; } > "$DB/$name"
+    rm -f "$CACHE/$file"
+    echo "mpk: $name-$ver installed"
+}
+
+cmd=${1:-help}; shift || true
+case "$cmd" in
+    list)
+        load_index
+        awk -F'|' -v a="$ARCH" '$1=="pkg" && $4==a {printf "%-20s %-10s %s\n",$2,$3,$10}' "$INDEX" ;;
+    info)
+        load_index
+        line=$(index_line "${1:?usage: mpk info <name>}")
+        [ -n "$line" ] || { echo "mpk: unknown package" >&2; exit 1; }
+        echo "$line" | awk -F'|' '{printf "name: %s\nversion: %s\narch: %s\ndeps: %s\nsize: %s\ntarget: %s\ndesc: %s\n",$2,$3,$4,$5,$7,$9,$10}' ;;
+    install)
+        [ $# -ge 1 ] || { echo "usage: mpk install <name>..." >&2; exit 1; }
+        load_index
+        for p in "$@"; do install_one "$p"; done ;;
+    installed)
+        [ -d "$DB" ] || exit 0
+        for f in "$DB"/*; do
+            [ -e "$f" ] || continue
+            printf '%-20s %s\n' "$(basename "$f")" "$(head -1 "$f" | cut -d= -f2)"
+        done ;;
+    remove)
+        name=${1:?usage: mpk remove <name>}
+        is_installed "$name" || { echo "mpk: $name not installed" >&2; exit 1; }
+        # remove files listed in manifest (skip version= header line)
+        tail -n +2 "$DB/$name" | while read -r f; do rm -f "$ROOT/$f"; done
+        rm -f "$DB/$name"
+        echo "mpk: $name removed" ;;
+    *)
+        cat <<EOF
+usage: mpk <command>
+  list                 list available packages for this arch ($ARCH)
+  info <name>          show package details
+  install <name>...    install with dependencies
+  installed            list installed packages
+  remove <name>        remove a package
+env: MPK_REPO MPK_ROOT MPK_FORCE_ARCH MPK_INSECURE MPK_PUBKEY
+EOF
+        ;;
+esac

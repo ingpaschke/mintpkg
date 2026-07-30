@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""mpk-genindex: generate (and optionally minisign) the repo INDEX.
+
+usage: mpk-genindex <repodir> [--key path/to/minisign.key]
+
+Scans <repodir> for *.meta sidecars written by mpk-build, hashes the matching
+tarballs, writes <repodir>/INDEX per docs/index-format.md. If minisign is
+installed and --key given (or MPK_SIGN_KEY set), also writes INDEX.minisig.
+"""
+import hashlib
+import os
+import subprocess
+import sys
+
+
+def parse_meta(path):
+    meta = {}
+    with open(path, encoding="ascii") as fh:
+        for line in fh:
+            line = line.strip()
+            if line and "=" in line:
+                k, v = line.split("=", 1)
+                meta[k] = v
+    return meta
+
+
+def main():
+    args = sys.argv[1:]
+    key = os.environ.get("MPK_SIGN_KEY")
+    if "--key" in args:
+        i = args.index("--key")
+        key = args[i + 1]
+        del args[i:i + 2]
+    if len(args) != 1:
+        sys.exit(__doc__.strip())
+    repodir = args[0]
+
+    lines = ["#mintpkg-index v1"]
+    metas = sorted(f for f in os.listdir(repodir) if f.endswith(".meta"))
+    if not metas:
+        sys.exit(f"no .meta files in {repodir} (run mpk-build first)")
+    for mf in metas:
+        m = parse_meta(os.path.join(repodir, mf))
+        tarball = mf[:-len(".meta")] + ".tar.gz"
+        tpath = os.path.join(repodir, tarball)
+        if not os.path.exists(tpath):
+            sys.exit(f"missing tarball for {mf}")
+        h = hashlib.sha256()
+        with open(tpath, "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+        for field in ("desc",):
+            if "|" in m.get(field, ""):
+                sys.exit(f"{mf}: '|' not allowed in {field}")
+        lines.append("|".join([
+            "pkg", m["name"], m["version"], m["arch"], m.get("deps", ""),
+            h.hexdigest(), str(os.path.getsize(tpath)), tarball,
+            m.get("target", "unix"), m.get("desc", ""),
+        ]))
+
+    index_path = os.path.join(repodir, "INDEX")
+    with open(index_path, "w", encoding="ascii") as fh:
+        fh.write("\n".join(lines) + "\n")
+    print(f"wrote {index_path} ({len(metas)} packages)")
+
+    if key:
+        subprocess.run(
+            ["minisign", "-S", "-s", key, "-m", index_path,
+             "-x", index_path + ".minisig"],
+            check=True)
+        print(f"signed {index_path}.minisig")
+    else:
+        print("unsigned (no --key / MPK_SIGN_KEY); client needs MPK_INSECURE=1")
+
+
+if __name__ == "__main__":
+    main()

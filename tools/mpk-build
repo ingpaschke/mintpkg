@@ -1,0 +1,97 @@
+#!/bin/bash
+# mpk-build: build one recipe into out/<pkg>-<ver>-<rel>-<arch>.tar.gz
+# usage: [MPK_ARCH=native|m68000|m68020-60|coldfire] mpk-build recipes/<name> [outdir]
+set -euo pipefail
+
+recipe_dir=${1:?usage: mpk-build recipes/<name> [outdir]}
+outdir=${2:-out}
+MPK_ARCH=${MPK_ARCH:-m68020-60}
+
+recipe_dir=$(cd "$recipe_dir" && pwd)
+mkdir -p "$outdir"; outdir=$(cd "$outdir" && pwd)
+[ -f "$recipe_dir/recipe.sh" ] || { echo "no recipe.sh in $recipe_dir" >&2; exit 1; }
+
+# toolchain setup
+case "$MPK_ARCH" in
+    native)
+        CC=${CC:-cc}; AR=${AR:-ar}; RANLIB=${RANLIB:-ranlib}; STRIP=${STRIP:-strip}
+        CFLAGS=${CFLAGS:--O2} ;;
+    m68000|m68020-60|coldfire)
+        tc=m68k-atari-mint
+        command -v "$tc-gcc" >/dev/null || { echo "cross toolchain $tc-gcc not found" >&2; exit 1; }
+        CC=$tc-gcc; AR=$tc-ar; RANLIB=$tc-ranlib; STRIP=$tc-strip
+        case "$MPK_ARCH" in
+            m68000)     CFLAGS="-O2 -m68000" ;;
+            m68020-60)  CFLAGS="-O2 -m68020-60" ;;
+            coldfire)   CFLAGS="-O2 -mcpu=5475" ;;
+        esac ;;
+    *) echo "unknown MPK_ARCH=$MPK_ARCH" >&2; exit 1 ;;
+esac
+export CC AR RANLIB STRIP CFLAGS MPK_ARCH
+
+# load recipe
+pkgname= pkgver= pkgrel=1 source= sha256= depends= target=unix desc= arch=
+# shellcheck disable=SC1091
+. "$recipe_dir/recipe.sh"
+[ -n "$pkgname" ] && [ -n "$pkgver" ] || { echo "recipe must set pkgname and pkgver" >&2; exit 1; }
+[ "$(basename "$recipe_dir")" = "$pkgname" ] || { echo "pkgname != recipe dir name" >&2; exit 1; }
+if [ -n "$arch" ] && [ "$MPK_ARCH" != native ]; then
+    case " $arch " in *" $MPK_ARCH "*) ;; *) echo "skip: $pkgname not for $MPK_ARCH"; exit 0 ;; esac
+fi
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/mpk-build.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+srcdir=$work/src; pkgdir=$work/pkg
+mkdir -p "$srcdir" "$pkgdir"
+export srcdir pkgdir
+
+# fetch + verify + extract sources
+set -- $sha256
+for url in $source; do
+    want=${1:-}; shift || true
+    f=$srcdir/$(basename "$url")
+    echo "fetch $url"
+    curl -fsSL -o "$f" "$url"
+    if [ -n "$want" ]; then
+        got=$(sha256sum "$f" | cut -d' ' -f1)
+        [ "$got" = "$want" ] || { echo "sha256 mismatch for $f: got $got want $want" >&2; exit 1; }
+    fi
+    case "$f" in
+        *.tar.gz|*.tgz)  tar -xzf "$f" -C "$srcdir" ;;
+        *.tar.bz2)       tar -xjf "$f" -C "$srcdir" ;;
+        *.tar.xz)        tar -xJf "$f" -C "$srcdir" ;;
+    esac
+done
+
+# cd into first extracted dir if any, else srcdir
+builddir=$(find "$srcdir" -mindepth 1 -maxdepth 1 -type d | head -1)
+builddir=${builddir:-$srcdir}
+cd "$builddir"
+
+# apply recipe patches
+for p in "$recipe_dir"/*.patch; do
+    [ -e "$p" ] || continue
+    echo "patch $(basename "$p")"
+    patch -p1 < "$p"
+done
+
+echo "build $pkgname-$pkgver ($MPK_ARCH)"
+build
+package
+
+# strip binaries (best effort)
+find "$pkgdir" -type f -exec sh -c '"$0" "$1" 2>/dev/null || true' "$STRIP" {} \; 2>/dev/null || true
+
+tarball=$outdir/$pkgname-$pkgver-$pkgrel-$MPK_ARCH.tar.gz
+tar -czf "$tarball" -C "$pkgdir" .
+
+# metadata sidecar consumed by mpk-genindex
+cat > "$outdir/$pkgname-$pkgver-$pkgrel-$MPK_ARCH.meta" <<EOF
+name=$pkgname
+version=$pkgver-$pkgrel
+arch=$MPK_ARCH
+deps=$(echo $depends | tr ' ' ',')
+target=$target
+desc=$desc
+EOF
+echo "wrote $tarball"

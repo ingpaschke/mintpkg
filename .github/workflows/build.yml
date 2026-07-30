@@ -1,0 +1,73 @@
+name: build repo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [m68000, m68020-60, coldfire]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install cross toolchain
+        run: |
+          sudo add-apt-repository -y ppa:vriviere/ppa
+          sudo apt-get update
+          sudo apt-get install -y cross-mint-essential
+
+      - name: build all recipes
+        run: |
+          for r in recipes/*/; do
+            MPK_ARCH=${{ matrix.arch }} tools/mpk-build "$r" repo/
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkgs-${{ matrix.arch }}
+          path: repo/
+
+  publish:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pkgs-*
+          merge-multiple: true
+          path: repo/
+
+      - name: generate + sign index
+        env:
+          MPK_SIGN_KEY_B64: ${{ secrets.MPK_SIGN_KEY_B64 }}
+          MPK_SIGN_PW: ${{ secrets.MPK_SIGN_PW }}
+        run: |
+          sudo apt-get install -y minisign
+          if [ -n "$MPK_SIGN_KEY_B64" ]; then
+            echo "$MPK_SIGN_KEY_B64" | base64 -d > /tmp/mpk.key
+            # minisign reads the password from stdin
+            echo "$MPK_SIGN_PW" | MPK_SIGN_KEY=/tmp/mpk.key tools/mpk-genindex repo/
+            rm -f /tmp/mpk.key
+          else
+            tools/mpk-genindex repo/
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: repo/
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
