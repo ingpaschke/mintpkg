@@ -1,0 +1,16 @@
+Use the XPG strerror_r on MiNT: mintlib provides __xpg_strerror_r and its
+plain strerror_r returns char* (GNU style), which breaks gnulib's int-return
+code path. Same fix as th-otto's gzip-gnulib-strerror_r.patch, path adjusted
+for findutils' gl/lib layout.
+
+--- a/gl/lib/strerror_r.c.orig	2018-11-24 12:29:22.856465591 +0100
++++ b/gl/lib/strerror_r.c	2018-11-24 12:29:35.852465308 +0100
+@@ -36,7 +36,7 @@
+
+ #include "strerror-override.h"
+
+-#if (__GLIBC__ >= 2 || defined __UCLIBC__ || defined __CYGWIN__) && HAVE___XPG_STRERROR_R /* glibc >= 2.3.4, cygwin >= 1.7.9 */
++#if (__GLIBC__ >= 2 || defined __UCLIBC__ || defined __CYGWIN__ || defined __MINT__) && HAVE___XPG_STRERROR_R /* glibc >= 2.3.4, cygwin >= 1.7.9 */
+
+ # define USE_XPG_STRERROR_R 1
+ extern
