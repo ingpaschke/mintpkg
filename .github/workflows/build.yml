@@ -21,6 +21,9 @@ jobs:
           sudo tar -xJf /tmp/crosstool.tar.xz -C /
           m68k-atari-mint-gcc --version | head -1
 
+      - name: install build prerequisites
+        run: sudo apt-get install -y autoconf automake libtool autopoint gettext
+
       - name: set up run-verification harness
         if: matrix.arch != 'coldfire'
         run: |

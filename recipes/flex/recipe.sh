@@ -15,8 +15,8 @@ build() {
     [ "$MPK_ARCH" != native ] && host="--host=m68k-atari-mint"
     stack=""
     [ "$MPK_ARCH" != native ] && stack="-Wl,-stack,256k"
-    # use-extensions patch touches configure.ac
-    autoreconf -fiv >/dev/null 2>&1
+    # use-extensions patch touches configure.ac (needs autopoint from gettext)
+    autoreconf -fiv >/dev/null
     # malloc/realloc cache vars: cross guesses "broken", and the rpl_
     # replacements then break the build
     CFLAGS="$CFLAGS -fomit-frame-pointer -std=gnu17" LDFLAGS="$stack" \

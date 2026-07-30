@@ -18,7 +18,7 @@ build() {
     [ "$MPK_ARCH" != native ] && stack="-Wl,-stack,128k"
 
     # patches touch configure.ac/Makefile.am; regenerate like rpmint does
-    autoreconf -fiv >/dev/null 2>&1
+    autoreconf -fiv >/dev/null
 
     if [ "$MPK_ARCH" != native ]; then
         mkdir -p hostbuild && cd hostbuild
