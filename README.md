@@ -59,7 +59,9 @@ Install a m68k-atari-mint toolchain (Vincent Riviere's PPA
 
 ## Status
 
-Proof of concept. Roadmap:
+Proof of concept. Packages: hello, zlib, bzip2, gzip, xz, tree, zstd, sed,
+grep, diffutils (three arches each; run-verified under emulated MiNT for
+m68000/m68020-60). Roadmap:
 
 - [ ] C client (drop bash/coreutils dependency for base install)
 - [ ] GEM front-end / stool-style web UI
