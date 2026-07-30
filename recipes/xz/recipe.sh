@@ -15,7 +15,7 @@ build() {
     [ "$MPK_ARCH" != native ] && host="--host=m68k-atari-mint"
     CFLAGS="$CFLAGS -fomit-frame-pointer" LDFLAGS="$CFLAGS" \
         ./configure $host --prefix=/usr --disable-shared --disable-nls \
-        --disable-scripts
+        --disable-scripts --disable-threads
     make
 }
 
