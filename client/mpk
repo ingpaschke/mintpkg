@@ -68,9 +68,14 @@ install_one() { # install_one <name>
     file=$(echo "$line" | awk -F'|' '{print $8}')
     target=$(echo "$line" | awk -F'|' '{print $9}')
 
-    # deps first
+    # deps first; recurse in a subshell: plain sh has no 'local', and a
+    # direct recursive call clobbers this invocation's variables
     oldifs=$IFS; IFS=','
-    for d in $deps; do IFS=$oldifs; [ -n "$d" ] && install_one "$d"; IFS=','; done
+    for d in $deps; do
+        IFS=$oldifs
+        [ -n "$d" ] && { (install_one "$d") || exit 1; }
+        IFS=','
+    done
     IFS=$oldifs
 
     echo "mpk: installing $name-$ver ($target)"
