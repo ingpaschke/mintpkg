@@ -16,9 +16,10 @@ jobs:
 
       - name: install cross toolchain
         run: |
-          sudo add-apt-repository -y ppa:vriviere/ppa
-          sudo apt-get update
-          sudo apt-get install -y cross-mint-essential
+          curl -fsSL -o /tmp/crosstool.tar.xz \
+            https://github.com/ingpaschke/mintpkg/releases/download/toolchain-20250702/crosstool-mint-20250702-linux64.tar.xz
+          sudo tar -xJf /tmp/crosstool.tar.xz -C /
+          m68k-atari-mint-gcc --version | head -1
 
       - name: build all recipes
         run: |
