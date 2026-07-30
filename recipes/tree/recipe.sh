@@ -27,3 +27,7 @@ package() {
     cp tree "$pkgdir/usr/bin/"
     cp doc/tree.1 "$pkgdir/usr/share/man/man1/"
 }
+
+check() {
+    mpk_mint_run '/e/pkg/usr/bin/tree /e/pkg/usr' | grep -q "tree.1"
+}

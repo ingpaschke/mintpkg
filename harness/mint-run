@@ -1,0 +1,53 @@
+#!/bin/bash
+# mint-run: execute a MiNT m68k binary (or shell command line) under headless
+# ARAnyM and print its output on the Linux side.
+#
+# usage: mint-run <binary> [args...]        copies binary into the guest, runs it
+#        mint-run -c '<shell command>'      runs a bash command line in the guest
+#
+# exit code = guest command's exit code (or 124 on emulator timeout).
+set -euo pipefail
+
+hdir=$(cd "$(dirname "$0")" && pwd)
+work=$hdir/work
+timeout_s=${MINT_RUN_TIMEOUT:-120}
+
+rm -f "$work/out.log" "$work/exitcode" "$work/payload"
+
+if [ "${1:-}" = -c ]; then
+    guest_cmd=${2:?usage: mint-run -c '<command>'}
+else
+    bin=${1:?usage: mint-run <binary> [args...] | mint-run -c '<cmd>'}
+    shift
+    cp "$bin" "$work/payload"
+    guest_cmd="/e/payload $*"
+fi
+
+# guest-side script; bash on MiNT, hostfs E: mounted as u:/e
+cat > "$work/test.sh" <<EOF
+cd /e
+{ $guest_cmd ; } > /e/out.log 2>&1
+echo \$? > /e/exitcode
+exec /e/shutdown.tos
+EOF
+
+# install headless mint.cnf (keep pristine copy once)
+cnf=$(find "$hdir"/drive_c/mint -maxdepth 2 -name mint.cnf | head -1)
+[ -f "$cnf.orig" ] || cp "$cnf" "$cnf.orig"
+cp "$hdir/mint-headless.cnf" "$cnf"
+
+cd "$hdir"
+set +e
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+    timeout "$timeout_s" aranym-mmu -c config.headless >/dev/null 2>"$work/aranym.log"
+emu_rc=$?
+set -e
+
+if [ ! -f "$work/exitcode" ]; then
+    echo "mint-run: no exitcode from guest (emulator rc=$emu_rc); aranym log tail:" >&2
+    tail -5 "$work/aranym.log" >&2
+    exit 124
+fi
+
+cat "$work/out.log" 2>/dev/null || true
+exit "$(cat "$work/exitcode")"

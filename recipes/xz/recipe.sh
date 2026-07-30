@@ -23,3 +23,9 @@ package() {
     make DESTDIR="$pkgdir" install
     rm -rf "$pkgdir/usr/share/doc"
 }
+
+check() {
+    mpk_mint_run 'echo xz check data > /tmp/t;
+        /e/pkg/usr/bin/xz -z -c /tmp/t > /tmp/t.xz;
+        /e/pkg/usr/bin/xz -d -c /tmp/t.xz' | grep -q "xz check data"
+}

@@ -1,0 +1,42 @@
+#!/bin/bash
+# setup-harness: assemble a headless ARAnyM MiNT-execution harness.
+# usage: setup-harness [destdir]   (default ./harness-rt)
+# needs: aranym, curl, unzip, m68k-atari-mint-gcc in PATH.
+set -euo pipefail
+
+here=$(cd "$(dirname "$0")" && pwd)
+dest=${1:-harness-rt}
+mkdir -p "$dest"; dest=$(cd "$dest" && pwd)
+
+command -v aranym-mmu >/dev/null || { echo "aranym not installed" >&2; exit 1; }
+command -v m68k-atari-mint-gcc >/dev/null || { echo "cross gcc not in PATH" >&2; exit 1; }
+
+echo "fetch FreeMiNT aranym snapshot bundle"
+curl -fsSL -o "$dest/fm.zip" https://atari.joska.no/snapshots/freemint/bootable/freemint-latest-aranym.zip
+unzip -oq "$dest/fm.zip" -d "$dest/unz"
+bundle=$(find "$dest/unz" -maxdepth 1 -mindepth 1 -type d | head -1)
+cp -r "$bundle"/. "$dest/"
+rm -rf "$dest/unz" "$dest/fm.zip"
+
+echo "fetch EmuTOS 512k (bundled 1024k ROM needs newer aranym than distro packages)"
+curl -fsSL -o "$dest/emutos/etos512k.zip" \
+    "https://downloads.sourceforge.net/project/emutos/emutos/1.4/emutos-512k-1.4.zip"
+unzip -oq "$dest/emutos/etos512k.zip" -d "$dest/emutos"
+
+echo "build headless config"
+sed -e 's/^RedirConsole = No/RedirConsole = Yes/' \
+    -e 's|^E =$|E = work|' \
+    -e 's/^GrabMouse = Yes/GrabMouse = No/' \
+    -e 's/^Enabled = Yes/Enabled = No/' \
+    -e 's|^EmuTOS = .*|EmuTOS = emutos/emutos-512k-1.4/etos512us.img|' \
+    "$dest/config" > "$dest/config.headless"
+
+echo "install runner + guest shutdown tool"
+mkdir -p "$dest/work"
+cp "$here/mint-run" "$here/mint-headless.cnf" "$dest/"
+chmod +x "$dest/mint-run"
+m68k-atari-mint-gcc -m68040 -O2 -o "$dest/work/shutdown.tos" "$here/shutdown.c"
+
+# mint-headless.cnf references the versioned mint dir; runner installs it at
+# runtime, nothing to do here.
+echo "harness ready: $dest/mint-run"

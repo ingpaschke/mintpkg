@@ -1,0 +1,20 @@
+# mintpkg test harness mint.cnf: console-only boot, run /e/test.sh, shutdown.
+# Installed over drive_c/mint/1-19-e53/mint.cnf by mint-run.
+
+sln ${SYSDIR}sys-root/bin      u:/bin
+sln ${SYSDIR}sys-root/etc      u:/etc
+sln ${SYSDIR}sys-root/opt      u:/opt
+sln ${SYSDIR}sys-root/root     u:/root
+sln ${SYSDIR}sys-root/tmp      u:/tmp
+sln ${SYSDIR}sys-root/var      u:/var
+
+setenv PATH /sbin;/bin;/usr/sbin;/usr/bin
+setenv HOSTNAME atari
+setenv TMPDIR u:/tmp
+setenv LOGNAME root
+setenv USER    root
+setenv HOME    /root
+setenv SHELL   /bin/bash
+
+echo mintpkg harness: running /e/test.sh
+INIT=u:/bin/bash u:/e/test.sh

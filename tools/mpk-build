@@ -82,6 +82,29 @@ package
 # strip binaries (best effort)
 find "$pkgdir" -type f -exec sh -c '"$0" "$1" 2>/dev/null || true' "$STRIP" {} \; 2>/dev/null || true
 
+# run-verification: recipe check() executes the staged package under
+# emulated MiNT via the harness (MPK_MINT_RUN=path to mint-run). The staged
+# tree appears in the guest at /e/pkg. Emulated 040 runs m68000 and
+# m68020-60 code; coldfire and native skip.
+if type check >/dev/null 2>&1; then
+    case "$MPK_ARCH" in
+        m68000|m68020-60) can_check=${MPK_MINT_RUN:-} ;;
+        *) can_check= ;;
+    esac
+    if [ -n "$can_check" ]; then
+        harness_work=$(dirname "$MPK_MINT_RUN")/work
+        rm -rf "$harness_work/pkg"
+        cp -r "$pkgdir" "$harness_work/pkg"
+        mpk_mint_run() { "$MPK_MINT_RUN" -c "$1"; }
+        echo "check $pkgname-$pkgver ($MPK_ARCH)"
+        check
+        rm -rf "$harness_work/pkg"
+        echo "check passed"
+    else
+        echo "check: skipped (arch $MPK_ARCH or no MPK_MINT_RUN)"
+    fi
+fi
+
 tarball=$outdir/$pkgname-$pkgver-$pkgrel-$MPK_ARCH.tar.gz
 tar -czf "$tarball" -C "$pkgdir" .
 

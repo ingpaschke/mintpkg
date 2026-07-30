@@ -25,6 +25,13 @@ functions. Keep recipes small; complexity belongs in patches, not recipes.
     build()    # cwd = extracted first source dir ($srcdir). Compile here.
     package()  # install into "$pkgdir" (acts as DESTDIR). Only files staged
                # into $pkgdir end up in the package.
+    check()    # optional run-verification. Runs after package() when a
+               # headless ARAnyM harness is available (MPK_MINT_RUN set) and
+               # the arch is emulatable (m68000, m68020-60). The staged
+               # package tree is visible in the guest at /e/pkg. Call
+               # mpk_mint_run '<guest bash command>'; its stdout comes back,
+               # its exit status fails the build on nonzero. Keep checks to a
+               # few emulator boots (about 9 s each).
 
 ## Environment provided by mpk-build
 

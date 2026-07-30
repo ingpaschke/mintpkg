@@ -21,6 +21,13 @@ jobs:
           sudo tar -xJf /tmp/crosstool.tar.xz -C /
           m68k-atari-mint-gcc --version | head -1
 
+      - name: set up run-verification harness
+        if: matrix.arch != 'coldfire'
+        run: |
+          sudo apt-get install -y aranym
+          harness/setup-harness /tmp/harness-rt
+          echo "MPK_MINT_RUN=/tmp/harness-rt/mint-run" >> "$GITHUB_ENV"
+
       - name: build all recipes
         run: |
           for r in recipes/*/; do

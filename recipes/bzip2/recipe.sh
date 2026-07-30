@@ -30,3 +30,9 @@ package() {
     cp libbz2.a "$pkgdir/usr/lib/"
     cp bzlib.h "$pkgdir/usr/include/"
 }
+
+check() {
+    mpk_mint_run 'echo bz2 check data > /tmp/t;
+        /e/pkg/usr/bin/bzip2 -z -c /tmp/t > /tmp/t.bz2;
+        /e/pkg/usr/bin/bzip2 -d -c /tmp/t.bz2' | grep -q "bz2 check data"
+}

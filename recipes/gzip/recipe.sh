@@ -28,3 +28,9 @@ package() {
     make DESTDIR="$pkgdir" install
     rm -rf "$pkgdir/usr/share/info" "$pkgdir/usr/share/doc"
 }
+
+check() {
+    mpk_mint_run 'echo gzip check data > /tmp/t;
+        /e/pkg/usr/bin/gzip -c /tmp/t > /tmp/t.gz;
+        /e/pkg/usr/bin/gzip -d -c /tmp/t.gz' | grep -q "gzip check data"
+}

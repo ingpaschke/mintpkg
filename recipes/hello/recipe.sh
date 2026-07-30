@@ -17,3 +17,7 @@ package() {
     mkdir -p "$pkgdir/usr/bin"
     cp hello "$pkgdir/usr/bin/hello"
 }
+
+check() {
+    mpk_mint_run '/e/pkg/usr/bin/hello' | grep -q "hello from mintpkg"
+}
