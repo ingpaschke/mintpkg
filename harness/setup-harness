@@ -24,7 +24,8 @@ curl -fsSL -o "$dest/emutos/etos512k.zip" \
 unzip -oq "$dest/emutos/etos512k.zip" -d "$dest/emutos"
 
 echo "build headless config"
-sed -e 's/^RedirConsole = No/RedirConsole = Yes/' \
+sed -e 's/^FastRAM = 64/FastRAM = 256/' \
+    -e 's/^RedirConsole = No/RedirConsole = Yes/' \
     -e 's|^E =$|E = work|' \
     -e 's/^GrabMouse = Yes/GrabMouse = No/' \
     -e 's/^Enabled = Yes/Enabled = No/' \

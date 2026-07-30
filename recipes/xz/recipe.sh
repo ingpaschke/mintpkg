@@ -25,7 +25,9 @@ package() {
 }
 
 check() {
+    # -1 preset: default -6 wants a ~94 MB dictionary, more than real Ataris
+    # (and the emulated guest) have
     mpk_mint_run 'echo xz check data > /tmp/t;
-        /e/pkg/usr/bin/xz -z -c /tmp/t > /tmp/t.xz;
+        /e/pkg/usr/bin/xz -1 -z -c /tmp/t > /tmp/t.xz;
         /e/pkg/usr/bin/xz -d -c /tmp/t.xz' | grep -q "xz check data"
 }
