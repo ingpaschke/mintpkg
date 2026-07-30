@@ -34,6 +34,16 @@ the bash already shipped with every MiNT distribution.
     docs/index-format.md       index spec
     .github/workflows/         CI: build all recipes, publish repo to Pages
 
+## Live repository
+
+    http://mintpkg.lpclabs.de/
+
+Plain HTTP on purpose: 68k targets cannot afford TLS. Integrity comes from
+the minisign-signed INDEX (public key: `keys/mpk.pub`, also served at
+`/mpk.pub`). HTTPS works too for modern clients. On device:
+
+    MPK_REPO=http://mintpkg.lpclabs.de mpk install <pkg>
+
 ## Quick demo (host, no cross-toolchain needed)
 
     MPK_ARCH=native tools/mpk-build recipes/hello
